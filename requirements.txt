@@ -1,9 +1,0 @@
-fastapi
-uvicorn
-pydantic
-pydantic-settings
-openai
-python-multipart
-python-jose[cryptography]
-python-dotenv
-google-generativeai
