@@ -5,9 +5,8 @@ from app.config import settings
 from app.api.api import api_router
 from app.utils.logging import logger
 from dotenv import load_dotenv
-import os 
+
 load_dotenv()
-print("API KEY:", os.getenv("GOOGLE_API_KEY"))
 
 @asynccontextmanager
 async def lifespan(app:FastAPI):
@@ -40,6 +39,7 @@ def create_application()->FastAPI:
         )
     
     return app
+    
 
 
 app = create_application()

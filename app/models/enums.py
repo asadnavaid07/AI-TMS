@@ -12,6 +12,8 @@ class CategoryEnum(str, Enum):
     COMPLIANCE = "Compliance"
     GENERAL = "General Inquiry"
     ACCESS_CONTROL = "Access Control"
+    ADMIN="Admin"
+    NETWORK="Network"
 
 class SeverityEnum(str,Enum):
     LOW = "Low"

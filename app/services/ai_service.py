@@ -1,49 +1,46 @@
-import google.generativeai as genai
+from openai import AsyncAzureOpenAI
 from typing import List, Dict, Any
 from app.config import settings
 from app.utils.logging import logger
 
-
-class GeminiClient:
+class AzureClient:
     def __init__(self):
         self._configure_client()
 
-    
     def _configure_client(self):
-        if not settings.google_api_key:
-            raise ValueError("GOOGLE_API_KEY environment variable is required")
-        
-        genai.configure(api_key=settings.google_api_key)
-        self.model = genai.GenerativeModel(settings.gemini_model)
-        logger.info(f"Gemini client configured with model: {settings.gemini_model}")
-    
+        if not settings.azure_api_key:
+            raise ValueError("AZURE_API_KEY environment variable is required")
+        if not settings.azure_endpoint:
+            raise ValueError("AZURE_ENDPOINT environment variable is required")
+
+        self.client = AsyncAzureOpenAI(
+            api_version=settings.azure_api_version,
+            azure_endpoint=settings.azure_endpoint,
+            api_key=settings.azure_api_key,
+        )
+        self.model = settings.azure_model
+        logger.info(f"Azure client configured with model: {self.model}")
+
     async def create_chat_completion(self, messages: List[Dict[str, str]], 
-                                   temperature: float = 0.3, 
-                                   max_tokens: int = 500) -> Any:
-
+                                   temperature: float = 1.0,
+                                   max_tokens: int = 4096) -> Any:
         try:
-            prompt = self._convert_messages_to_prompt(messages)
-
-            generation_config = genai.types.GenerationConfig(
+            response = await self.client.chat.completions.create(
+                messages=messages,
+                max_tokens=max_tokens,
                 temperature=temperature,
-                max_output_tokens=max_tokens,
-                candidate_count=1,
+                top_p=1.0,
+                model=self.model
             )
-    
-            response = await self.model.generate_content_async(
-                prompt,
-                generation_config=generation_config
-            )
-            
             return self._convert_response_format(response)
             
         except Exception as e:
-            logger.error(f"Gemini API error: {e}")
+            logger.error(f"Azure API error: {e}")
             raise
-    
+
     def _convert_messages_to_prompt(self, messages: List[Dict[str, str]]) -> str:
+
         prompt_parts = []
-        
         for message in messages:
             role = message.get("role", "user")
             content = message.get("content", "")
@@ -54,30 +51,27 @@ class GeminiClient:
                 prompt_parts.append(f"User: {content}")
             elif role == "assistant":
                 prompt_parts.append(f"Assistant: {content}")
-        
+                
         return "\n\n".join(prompt_parts)
-    
-    def _convert_response_format(self, response) -> Dict[str, Any]:
 
+    def _convert_response_format(self, response) -> Dict[str, Any]:
         try:
-            text_content = response.text if hasattr(response, 'text') else str(response)
-            
             return {
                 "choices": [{
                     "message": {
-                        "content": text_content,
+                        "content": response.choices[0].message.content,
                         "role": "assistant"
                     },
-                    "finish_reason": "stop"
+                    "finish_reason": response.choices[0].finish_reason
                 }],
                 "usage": {
-                    "prompt_tokens": 0,  
-                    "completion_tokens": 0,
-                    "total_tokens": 0
+                    "prompt_tokens": response.usage.prompt_tokens,
+                    "completion_tokens": response.usage.completion_tokens,
+                    "total_tokens": response.usage.total_tokens
                 }
             }
         except Exception as e:
-            logger.error(f"Error converting Gemini response: {e}")
+            logger.error(f"Error converting Azure response: {e}")
             return {
                 "choices": [{
                     "message": {

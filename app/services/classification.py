@@ -1,91 +1,230 @@
 import json
 from datetime import datetime
 from fastapi import HTTPException
-from app.models import IncidentRequest, AIClassificationResponse
-from app.services.ai_service import GeminiClient
+from typing import Dict, Any, List, Optional, Tuple
+from app.models.requests import IncidentRequest
+from app.services.ai_service import AzureClient
 from app.utils.logging import logger
+
+# Sample staff data (unchanged)
+SAMPLE_STAFF_DATA = [
+    {
+        "@odata.type": "#Microsoft.Dynamics.CRM.cr6dd_staff",
+        "@odata.id": "https://org2d697781.crm.dynamics.com/api/data/v9.1/cr6dd_staffs(ace478dc-6057-f011-bec2-000d3a5c4fb0)",
+        "@odata.etag": "W/\"2637546\"",
+        "@odata.editLink": "cr6dd_staffs(ace478dc-6057-f011-bec2-000d3a5c4fb0)",
+        "cr6dd_department@OData.Community.Display.V1.FormattedValue": "IT",
+        "cr6dd_department": 594700000,
+        "cr6dd_skillset": "I can handle software IT issues",
+        "cr6dd_staffid@odata.type": "#Guid",
+        "cr6dd_staffid": "ace478dc-6057-f011-bec2-000d3a5c4fb0",
+        "cr6dd_newcolumn": "001",
+        "cr6dd_availability@OData.Community.Display.V1.FormattedValue": "Yes",
+        "cr6dd_availability": True
+    },
+    {
+        "@odata.type": "#Microsoft.Dynamics.CRM.cr6dd_staff",
+        "@odata.id": "https://org2d697781.crm.dynamics.com/api/data/v9.1/cr6dd_staffs(d9c37551-f757-f011-bec2-000d3a5c4fb0)",
+        "@odata.etag": "W/\"2640558\"",
+        "@odata.editLink": "cr6dd_staffs(d9c37551-f757-f011-bec2-000d3a5c4fb0)",
+        "cr6dd_department@OData.Community.Display.V1.FormattedValue": "HR",
+        "cr6dd_department": 594700001,
+        "cr6dd_skillset": "Relationships, Conflicts",
+        "cr6dd_staffid@odata.type": "#Guid",
+        "cr6dd_staffid": "d9c37551-f757-f011-bec2-000d3a5c4fb0",
+        "cr6dd_newcolumn": "002",
+        "cr6dd_availability@OData.Community.Display.V1.FormattedValue": "Yes",
+        "cr6dd_availability": True
+    },
+    {
+        "@odata.type": "#Microsoft.Dynamics.CRM.cr6dd_staff",
+        "@odata.id": "https://org2d697781.crm.dynamics.com/api/data/v9.1/cr6dd_staffs(7d8e86ad-f957-f011-bec2-000d3a5c4fb0)",
+        "@odata.etag": "W/\"2640778\"",
+        "@odata.editLink": "cr6dd_staffs(7d8e86ad-f957-f011-bec2-000d3a5c4fb0)",
+        "cr6dd_department@OData.Community.Display.V1.FormattedValue": "Finance",
+        "cr6dd_department": 594700002,
+        "cr6dd_skillset": "Bonus, Paycheck",
+        "cr6dd_staffid@odata.type": "#Guid",
+        "cr6dd_staffid": "7d8e86ad-f957-f011-bec2-000d3a5c4fb0",
+        "cr6dd_newcolumn": "003",
+        "cr6dd_availability@OData.Community.Display.V1.FormattedValue": "Yes",  # Changed to True for testing
+        "cr6dd_availability": True
+    },{
+        "@odata.type": "#Microsoft.Dynamics.CRM.cr6dd_staff",
+        "@odata.id": "https://org2d697781.crm.dynamics.com/api/data/v9.1/cr6dd_staffs(12345678-1234-1234-1234-1234567890ab)",
+        "@odata.etag": "W/\"2640779\"",
+        "@odata.editLink": "cr6dd_staffs(12345678-1234-1234-1234-1234567890ab)",
+        "cr6dd_department@OData.Community.Display.V1.FormattedValue": "Admin",
+        "cr6dd_department": 594700003,
+        "cr6dd_skillset": "General Support",
+        "cr6dd_staffid@odata.type": "#Guid",
+        "cr6dd_staffid": "12345678-1234-1234-1234-1234567890ab",
+        "cr6dd_newcolumn": "004",
+        "cr6dd_availability@OData.Community.Display.V1.FormattedValue": "Yes",
+        "cr6dd_availability": True
+    }
+]
 
 class AIClassificationService:
     def __init__(self):
-        self.ai_cleint=GeminiClient()
-        self.classification_prompt="""
-        You are an expert IT incident analyst. Analyze the following incident and provide structured classification.
-        
-        Incident Title: {title}
-        Description: {description}
-        Reporter: {reporter_name} ({reporter_email})
-        Department: {department}
-        
-        Analyze and respond with ONLY a valid JSON object containing:
+        self.ai_client = AzureClient()
+        self.combined_prompt = """
+        You are an expert IT incident analyst and staff assignment specialist. Analyze the following incident and provide a structured classification, department mapping, and staff assignment based on available staff data.
+
+        Incident Description: "{description}"
+
+        Available Staff Data:
+        {staff_data}
+
+        Instructions:
+        1. Classify the incident based on its description, considering:
+           - Business impact and urgency
+           - Technical complexity
+           - Security implications
+           - Resource requirements
+        2. Map the incident to the most appropriate department based on the staff's skillsets and availability.
+        3. Select the best available staff member (with staff ID and staff code) from the chosen department by semantically matching the incident description to their skillset.
+        4. If no suitable department or staff is found, default to the "Admin" department and indicate no staff is available.
+        5. Only consider staff with "availability": true.
+
+        Respond with ONLY a valid JSON object containing:
         {{
-            "category": "one of: IT Support, Network, Software, Hardware, Security, Access Control, General",
+            "category": "brief category description (e.g., 'Network Issue', 'Security Problem', 'HR Query', etc.)",
             "severity": "one of: Low, Medium, High, Critical",
-            "confidence_score": float between 0.0 and 1.0,
             "summary": "concise 1-2 sentence summary",
-            "estimated_resolution_time": "estimated time like '2-4 hours' or '1-2 days'",
-            "assigned_team": "specific team name",
-            "priority_score": integer between 1 and 10
+            "best_department": "exact department name from staff data (e.g., 'IT', 'HR', 'Finance', 'Admin')",
+            "department_reasoning": "brief explanation of why this department was chosen",
+            "department_confidence_score": <integer between 0-100>,
+            "assigned_staff_id": "staff ID (cr6dd_staffid) of the selected staff or null if none available",
+            "assigned_staff_code": "staff code (cr6dd_newcolumn) of the selected staff or null if none available",
+            "staff_skillset": "skillset of the selected staff or null if none available",
+            "staff_assignment_status": "one of: 'assigned', 'assigned_fallback', 'no_staff_available'",
+            "skillset_match_score": <integer between 0-100 or 0 if no staff assigned>,
+            "staff_match_reasoning": "brief explanation of why this staff was chosen or why none was assigned"
         }}
-        
-        Consider:
-        - Business impact and urgency
-        - Technical complexity
-        - Security implications
-        - Resource requirements
-        
+
         Respond ONLY with the JSON object, no additional text or formatting.
         """
 
-    
-    async def classify_incident(self,incident:IncidentRequest)->AIClassificationResponse:
+    def get_staff_data(self):
         try:
-            start_time=datetime.now()
+            from app.api.endpoints.staff import stored_staff_data
+            return stored_staff_data if stored_staff_data else SAMPLE_STAFF_DATA
+        except (ImportError, AttributeError):
+            return SAMPLE_STAFF_DATA
 
-            prompt=self.classification_prompt.format(
-                title=incident.title,
+    def format_staff_data_for_prompt(self):
+        
+        staff_data = self.get_staff_data()
+        formatted = []
+        for staff in staff_data:
+            formatted.append(
+                f"Department: {staff.get('cr6dd_department@OData.Community.Display.V1.FormattedValue', '')}, "
+                f"Skillset: {staff.get('cr6dd_skillset', '')}, "
+                f"Staff ID: {staff.get('cr6dd_staffid', '')}, "
+                f"Staff Code: {staff.get('cr6dd_newcolumn', '')}, "
+                f"Availability: {'Yes' if staff.get('cr6dd_availability', False) else 'No'}"
+            )
+        return "\n".join(formatted)
+
+    async def classify_incident(self, incident: IncidentRequest) -> Dict[str, Any]:
+        try:
+            start_time = datetime.now()
+
+            prompt = self.combined_prompt.format(
                 description=incident.description,
-                reporter_name=incident.reporter_name,
-                reporter_email=incident.reporter_email,
-                department=incident.department or "Not specified"
+                staff_data=self.format_staff_data_for_prompt()
             )
 
-            messages=[
-                {"role": "system", "content": "You are an expert IT incident classifier. Respond only with valid JSON."},
+            messages = [
+                {"role": "system", "content": "You are an expert IT incident classifier and staff assignment specialist. Respond only with valid JSON."},
                 {"role": "user", "content": prompt}
             ]
 
-            response=await self.ai_cleint.create_chat_completion(
-                 messages=messages,
+            response = await self.ai_client.create_chat_completion(
+                messages=messages,
                 temperature=0.3,
                 max_tokens=500
             )
 
-            ai_response=response['choices'][0]["message"]["content"].strip()
+            ai_response = response['choices'][0]["message"]["content"].strip()
 
+            # Clean up the response
             if ai_response.startswith("```json"):
                 ai_response = ai_response[7:-3]
             elif ai_response.startswith("```"):
                 ai_response = ai_response[3:-3]
-     
+            
             json_start = ai_response.find('{')
             json_end = ai_response.rfind('}') + 1
             if json_start != -1 and json_end != -1:
                 ai_response = ai_response[json_start:json_end]
             
-            classification_data=json.loads(ai_response)
-            classification=AIClassificationResponse(**classification_data)
+            response_data = json.loads(ai_response)
 
-            processing_time = (datetime.now() - start_time).total_seconds() * 1000
+            staff_data = self.get_staff_data()
+            departments = {staff["cr6dd_department@OData.Community.Display.V1.FormattedValue"] for staff in staff_data}
+            best_department = response_data.get("best_department", "Admin")
+            if best_department not in departments:
+                logger.warning(f"AI suggested department '{best_department}' not found in staff data. Defaulting to Admin.")
+                response_data["best_department"] = "Admin"
+                response_data["department_reasoning"] = f"Fallback to Admin: {response_data.get('department_reasoning', 'Invalid department')}"
+                response_data["department_confidence_score"] = 0
+                response_data["assigned_staff_id"] = None
+                response_data["assigned_staff_code"] = None
+                response_data["staff_skillset"] = None
+                response_data["staff_assignment_status"] = "no_staff_available"
+                response_data["skillset_match_score"] = 0
+                response_data["staff_match_reasoning"] = "No staff available; invalid department"
+
+            if response_data.get("assigned_staff_id"):
+                staff = next((s for s in staff_data if s["cr6dd_staffid"] == response_data["assigned_staff_id"]), None)
+                if staff and staff["cr6dd_availability"]:
+                    if staff["cr6dd_department@OData.Community.Display.V1.FormattedValue"] != response_data["best_department"]:
+                        logger.warning(f"Assigned staff {response_data['assigned_staff_id']} does not belong to {response_data['best_department']}. Defaulting to no staff.")
+                        response_data["assigned_staff_id"] = None
+                        response_data["assigned_staff_code"] = None
+                        response_data["staff_skillset"] = None
+                        response_data["staff_assignment_status"] = "no_staff_available"
+                        response_data["skillset_match_score"] = 0
+                        response_data["staff_match_reasoning"] = "Assigned staff does not match department"
+                elif not staff or not staff["cr6dd_availability"]:
+                    logger.warning(f"Assigned staff {response_data['assigned_staff_id']} is invalid or unavailable. Defaulting to no staff.")
+                    response_data["assigned_staff_id"] = None
+                    response_data["assigned_staff_code"] = None
+                    response_data["staff_skillset"] = None
+                    response_data["staff_assignment_status"] = "no_staff_available"
+                    response_data["skillset_match_score"] = 0
+                    response_data["staff_match_reasoning"] = "Assigned staff is unavailable or invalid"
+
+            classification_response = {
+                "category": response_data.get("category", "General"),
+                "severity": response_data.get("severity", "Medium"),
+                "summary": response_data.get("summary", "Incident classification summary")
+            }
+            print(classification_response)
+
+            staff_assignment = {
+                "assigned_staff_id": response_data.get("assigned_staff_id"),
+                "assigned_staff_code": response_data.get("assigned_staff_code"),
+                "assigned_department": response_data.get("best_department"),
+                "staff_skillset": response_data.get("staff_skillset"),
+            }
+
+            processing_time = int((datetime.now() - start_time).total_seconds() * 1000)
             logger.info(f"Classification completed in {processing_time:.2f}ms")
-            
-            return classification
-            
+
+            return {
+                "classification": classification_response,
+                "staff_assignment": staff_assignment,
+                "processing_time_ms": processing_time,
+                "timestamp": datetime.now()
+            }
+
         except json.JSONDecodeError as e:
             logger.error(f"JSON parsing error: {e}")
             logger.error(f"Raw AI response: {ai_response}")
             raise HTTPException(status_code=500, detail="AI response parsing failed")
         except Exception as e:
             logger.error(f"Classification error: {e}")
-            raise HTTPException(status_code=500, detail=" error")
-
-
+            raise HTTPException(status_code=500, detail="Classification service error")
