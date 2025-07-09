@@ -5,72 +5,15 @@ from typing import Dict, Any, List, Optional, Tuple
 from app.models.requests import IncidentRequest
 from app.services.ai_service import AzureClient
 from app.utils.logging import logger
+from app.services.sample_data import SAMPLE_STAFF_DATA
 
-# Sample staff data (unchanged)
-SAMPLE_STAFF_DATA = [
-    {
-        "@odata.type": "#Microsoft.Dynamics.CRM.cr6dd_staff",
-        "@odata.id": "https://org2d697781.crm.dynamics.com/api/data/v9.1/cr6dd_staffs(ace478dc-6057-f011-bec2-000d3a5c4fb0)",
-        "@odata.etag": "W/\"2637546\"",
-        "@odata.editLink": "cr6dd_staffs(ace478dc-6057-f011-bec2-000d3a5c4fb0)",
-        "cr6dd_department@OData.Community.Display.V1.FormattedValue": "IT",
-        "cr6dd_department": 594700000,
-        "cr6dd_skillset": "I can handle software IT issues",
-        "cr6dd_staffid@odata.type": "#Guid",
-        "cr6dd_staffid": "ace478dc-6057-f011-bec2-000d3a5c4fb0",
-        "cr6dd_newcolumn": "001",
-        "cr6dd_availability@OData.Community.Display.V1.FormattedValue": "Yes",
-        "cr6dd_availability": True
-    },
-    {
-        "@odata.type": "#Microsoft.Dynamics.CRM.cr6dd_staff",
-        "@odata.id": "https://org2d697781.crm.dynamics.com/api/data/v9.1/cr6dd_staffs(d9c37551-f757-f011-bec2-000d3a5c4fb0)",
-        "@odata.etag": "W/\"2640558\"",
-        "@odata.editLink": "cr6dd_staffs(d9c37551-f757-f011-bec2-000d3a5c4fb0)",
-        "cr6dd_department@OData.Community.Display.V1.FormattedValue": "HR",
-        "cr6dd_department": 594700001,
-        "cr6dd_skillset": "Relationships, Conflicts",
-        "cr6dd_staffid@odata.type": "#Guid",
-        "cr6dd_staffid": "d9c37551-f757-f011-bec2-000d3a5c4fb0",
-        "cr6dd_newcolumn": "002",
-        "cr6dd_availability@OData.Community.Display.V1.FormattedValue": "Yes",
-        "cr6dd_availability": True
-    },
-    {
-        "@odata.type": "#Microsoft.Dynamics.CRM.cr6dd_staff",
-        "@odata.id": "https://org2d697781.crm.dynamics.com/api/data/v9.1/cr6dd_staffs(7d8e86ad-f957-f011-bec2-000d3a5c4fb0)",
-        "@odata.etag": "W/\"2640778\"",
-        "@odata.editLink": "cr6dd_staffs(7d8e86ad-f957-f011-bec2-000d3a5c4fb0)",
-        "cr6dd_department@OData.Community.Display.V1.FormattedValue": "Finance",
-        "cr6dd_department": 594700002,
-        "cr6dd_skillset": "Bonus, Paycheck",
-        "cr6dd_staffid@odata.type": "#Guid",
-        "cr6dd_staffid": "7d8e86ad-f957-f011-bec2-000d3a5c4fb0",
-        "cr6dd_newcolumn": "003",
-        "cr6dd_availability@OData.Community.Display.V1.FormattedValue": "Yes",  # Changed to True for testing
-        "cr6dd_availability": True
-    },{
-        "@odata.type": "#Microsoft.Dynamics.CRM.cr6dd_staff",
-        "@odata.id": "https://org2d697781.crm.dynamics.com/api/data/v9.1/cr6dd_staffs(12345678-1234-1234-1234-1234567890ab)",
-        "@odata.etag": "W/\"2640779\"",
-        "@odata.editLink": "cr6dd_staffs(12345678-1234-1234-1234-1234567890ab)",
-        "cr6dd_department@OData.Community.Display.V1.FormattedValue": "Admin",
-        "cr6dd_department": 594700003,
-        "cr6dd_skillset": "General Support",
-        "cr6dd_staffid@odata.type": "#Guid",
-        "cr6dd_staffid": "12345678-1234-1234-1234-1234567890ab",
-        "cr6dd_newcolumn": "004",
-        "cr6dd_availability@OData.Community.Display.V1.FormattedValue": "Yes",
-        "cr6dd_availability": True
-    }
-]
 
 class AIClassificationService:
     def __init__(self):
         self.ai_client = AzureClient()
         self.combined_prompt = """
         You are an expert IT incident analyst and staff assignment specialist. Analyze the following incident and provide a structured classification, department mapping, and staff assignment based on available staff data.
-
+        You must analyze the incident in ANY language but respond ONLY in English using the specified JSON format.
         Incident Description: "{description}"
 
         Available Staff Data:
@@ -86,18 +29,24 @@ class AIClassificationService:
         3. Select the best available staff member (with staff ID and staff code) from the chosen department by semantically matching the incident description to their skillset.
         4. If no suitable department or staff is found, default to the "Admin" department and indicate no staff is available.
         5. Only consider staff with "availability": true.
-
+        6. Fallback for Controversial or Problematic Descriptions:
+           - If the incident description is ambiguous, controversial, offensive, or cannot be clearly classified (e.g., contains inappropriate language, lacks sufficient detail, or raises ethical concerns), classify it as:
+             - category: "Unclassified"
+             - severity: "Low"
+             - summary: "Incident could not be classified due to ambiguous or problematic description."
+             And it should be assign to admin.
         Respond with ONLY a valid JSON object containing:
         {{
             "category": "brief category description (e.g., 'Network Issue', 'Security Problem', 'HR Query', etc.)",
-            "severity": "one of: Low, Medium, High, Critical",
+            "severity": "one of: Low, Medium, High",
             "summary": "concise 1-2 sentence summary",
+            "email:"professional email body",
             "best_department": "exact department name from staff data (e.g., 'IT', 'HR', 'Finance', 'Admin')",
             "department_reasoning": "brief explanation of why this department was chosen",
             "department_confidence_score": <integer between 0-100>,
-            "assigned_staff_id": "staff ID (cr6dd_staffid) of the selected staff or null if none available",
-            "assigned_staff_code": "staff code (cr6dd_newcolumn) of the selected staff or null if none available",
-            "staff_skillset": "skillset of the selected staff or null if none available",
+            "assigned_staff_id": "staff ID (cr6dd_staffid) of the selected staff",
+            "assigned_staff_code": "staff code (cr6dd_newcolumn) of the selected staff",
+            "staff_skillset": "skillset of the selected staff",
             "staff_assignment_status": "one of: 'assigned', 'assigned_fallback', 'no_staff_available'",
             "skillset_match_score": <integer between 0-100 or 0 if no staff assigned>,
             "staff_match_reasoning": "brief explanation of why this staff was chosen or why none was assigned"
@@ -114,7 +63,6 @@ class AIClassificationService:
             return SAMPLE_STAFF_DATA
 
     def format_staff_data_for_prompt(self):
-        
         staff_data = self.get_staff_data()
         formatted = []
         for staff in staff_data:
@@ -149,7 +97,6 @@ class AIClassificationService:
 
             ai_response = response['choices'][0]["message"]["content"].strip()
 
-            # Clean up the response
             if ai_response.startswith("```json"):
                 ai_response = ai_response[7:-3]
             elif ai_response.startswith("```"):
@@ -197,12 +144,25 @@ class AIClassificationService:
                     response_data["skillset_match_score"] = 0
                     response_data["staff_match_reasoning"] = "Assigned staff is unavailable or invalid"
 
+
+            if response_data.get("category") == "Unclassified" or response_data.get("staff_assignment_status") == "no_staff_available":
+                logger.warning(f"AI response indicates unclassified or problematic incident: {response_data}")
+                response_data["best_department"] = "Admin"
+                response_data["department_reasoning"] = "Defaulted to Admin due to unclassified or problematic incident description."
+                response_data["department_confidence_score"] = 0
+                response_data["assigned_staff_id"] = None
+                response_data["assigned_staff_code"] = None
+                response_data["staff_skillset"] = None
+                response_data["staff_assignment_status"] = "no_staff_available"
+                response_data["skillset_match_score"] = 0
+                response_data["staff_match_reasoning"] = "No staff assigned due to unclassified or problematic incident description"
+
             classification_response = {
                 "category": response_data.get("category", "General"),
                 "severity": response_data.get("severity", "Medium"),
-                "summary": response_data.get("summary", "Incident classification summary")
+                "summary": response_data.get("summary", "Incident classification summary"),
+                "email": response_data.get("email", "Incident classification email")
             }
-            print(classification_response)
 
             staff_assignment = {
                 "assigned_staff_id": response_data.get("assigned_staff_id"),
