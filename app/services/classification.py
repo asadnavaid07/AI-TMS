@@ -27,25 +27,25 @@ class AIClassificationService:
            - Resource requirements
         2. Map the incident to the most appropriate department based on the staff's skillsets and availability.
         3. Select the best available staff member (with staff ID and staff code) from the chosen department by semantically matching the incident description to their skillset.
-        4. If no suitable department or staff is found, default to the "Admin" department and indicate no staff is available.
+        4. If no suitable department or staff is found, default to the "Admin" department and select an available staff member from Admin.
         5. Only consider staff with "availability": true.
         6. Fallback for Controversial or Problematic Descriptions:
            - If the incident description is ambiguous, controversial, offensive, or cannot be clearly classified (e.g., contains inappropriate language, lacks sufficient detail, or raises ethical concerns), classify it as:
              - category: "Unclassified"
              - severity: "Low"
              - summary: "Incident could not be classified due to ambiguous or problematic description."
-             And it should be assign to admin.
+             And assign to an available Admin staff member.
         Respond with ONLY a valid JSON object containing:
         {{
             "category": "brief category description (e.g., 'Network Issue', 'Security Problem', 'HR Query', etc.)",
             "severity": "one of: Low, Medium, High",
             "summary": "concise 1-2 sentence summary",
-            "email:"professional email body",
+            "email": "professional email body for assigned staff",
             "best_department": "exact department name from staff data (e.g., 'IT', 'HR', 'Finance', 'Admin')",
             "department_reasoning": "brief explanation of why this department was chosen",
             "department_confidence_score": <integer between 0-100>,
-            "assigned_staff_id": "staff ID (cr6dd_staffid) of the selected staff",
-            "assigned_staff_code": "staff code (cr6dd_newcolumn) of the selected staff",
+            "assigned_staff_email": "staff Email (cr6dd_email) of the selected staff",
+            "assigned_staff_name": "staff name (cr6dd_name) of the selected staff",
             "staff_skillset": "skillset of the selected staff",
             "staff_assignment_status": "one of: 'assigned', 'assigned_fallback', 'no_staff_available'",
             "skillset_match_score": <integer between 0-100 or 0 if no staff assigned>,
@@ -69,15 +69,25 @@ class AIClassificationService:
             formatted.append(
                 f"Department: {staff.get('cr6dd_department@OData.Community.Display.V1.FormattedValue', '')}, "
                 f"Skillset: {staff.get('cr6dd_skillset', '')}, "
-                f"Staff ID: {staff.get('cr6dd_staffid', '')}, "
-                f"Staff Code: {staff.get('cr6dd_newcolumn', '')}, "
+                f"Staff Email: {staff.get('cr6dd_email', '')}, "
+                f"Staff Name: {staff.get('cr6dd_name', '')}, "
                 f"Availability: {'Yes' if staff.get('cr6dd_availability', False) else 'No'}"
             )
         return "\n".join(formatted)
 
+    def select_admin_staff(self, staff_data: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        """Select an available staff member from the Admin department."""
+        admin_staff = [
+            staff for staff in staff_data 
+            if staff.get("cr6dd_department@OData.Community.Display.V1.FormattedValue") == "Admin" 
+            and staff.get("cr6dd_availability", False)
+        ]
+        return admin_staff[0] if admin_staff else None
+
     async def classify_incident(self, incident: IncidentRequest) -> Dict[str, Any]:
         try:
             start_time = datetime.now()
+            staff_data = self.get_staff_data()
 
             prompt = self.combined_prompt.format(
                 description=incident.description,
@@ -97,6 +107,7 @@ class AIClassificationService:
 
             ai_response = response['choices'][0]["message"]["content"].strip()
 
+            # Clean up AI response to extract valid JSON
             if ai_response.startswith("```json"):
                 ai_response = ai_response[7:-3]
             elif ai_response.startswith("```"):
@@ -109,54 +120,81 @@ class AIClassificationService:
             
             response_data = json.loads(ai_response)
 
-            staff_data = self.get_staff_data()
             departments = {staff["cr6dd_department@OData.Community.Display.V1.FormattedValue"] for staff in staff_data}
             best_department = response_data.get("best_department", "Admin")
             if best_department not in departments:
                 logger.warning(f"AI suggested department '{best_department}' not found in staff data. Defaulting to Admin.")
+                admin_staff = self.select_admin_staff(staff_data)
                 response_data["best_department"] = "Admin"
-                response_data["department_reasoning"] = f"Fallback to Admin: {response_data.get('department_reasoning', 'Invalid department')}"
+                response_data["department_reasoning"] = f"Fallback to Admin: Invalid department '{best_department}' not found in staff data."
                 response_data["department_confidence_score"] = 0
-                response_data["assigned_staff_id"] = None
-                response_data["assigned_staff_code"] = None
-                response_data["staff_skillset"] = None
-                response_data["staff_assignment_status"] = "no_staff_available"
-                response_data["skillset_match_score"] = 0
-                response_data["staff_match_reasoning"] = "No staff available; invalid department"
-
-            if response_data.get("assigned_staff_id"):
-                staff = next((s for s in staff_data if s["cr6dd_staffid"] == response_data["assigned_staff_id"]), None)
-                if staff and staff["cr6dd_availability"]:
-                    if staff["cr6dd_department@OData.Community.Display.V1.FormattedValue"] != response_data["best_department"]:
-                        logger.warning(f"Assigned staff {response_data['assigned_staff_id']} does not belong to {response_data['best_department']}. Defaulting to no staff.")
-                        response_data["assigned_staff_id"] = None
-                        response_data["assigned_staff_code"] = None
-                        response_data["staff_skillset"] = None
-                        response_data["staff_assignment_status"] = "no_staff_available"
-                        response_data["skillset_match_score"] = 0
-                        response_data["staff_match_reasoning"] = "Assigned staff does not match department"
-                elif not staff or not staff["cr6dd_availability"]:
-                    logger.warning(f"Assigned staff {response_data['assigned_staff_id']} is invalid or unavailable. Defaulting to no staff.")
-                    response_data["assigned_staff_id"] = None
-                    response_data["assigned_staff_code"] = None
+                if admin_staff:
+                    response_data["assigned_staff_email"] = admin_staff["cr6dd_email"]
+                    response_data["assigned_staff_name"] = admin_staff["cr6dd_name"]
+                    response_data["staff_skillset"] = admin_staff["cr6dd_skillset"]
+                    response_data["staff_assignment_status"] = "assigned_fallback"
+                    response_data["skillset_match_score"] = 50
+                    response_data["staff_match_reasoning"] = "Assigned to available Admin staff due to invalid department."
+                else:
+                    response_data["assigned_staff_email"] = None
+                    response_data["assigned_staff_name"] = None
                     response_data["staff_skillset"] = None
                     response_data["staff_assignment_status"] = "no_staff_available"
                     response_data["skillset_match_score"] = 0
-                    response_data["staff_match_reasoning"] = "Assigned staff is unavailable or invalid"
+                    response_data["staff_match_reasoning"] = "No available staff in Admin department."
 
+            # Validate assigned staff
+            if response_data.get("assigned_staff_email"):
+                staff = next((s for s in staff_data if s["cr6dd_email"] == response_data["assigned_staff_email"]), None)
+                if staff and staff["cr6dd_availability"]:
+                    if staff["cr6dd_department@OData.Community.Display.V1.FormattedValue"] != response_data["best_department"]:
+                        logger.warning(f"Assigned staff {response_data['assigned_staff_email']} does not belong to {response_data['best_department']}. Defaulting to Admin staff.")
+                        admin_staff = self.select_admin_staff(staff_data)
+                        response_data["best_department"] = "Admin"
+                        response_data["department_reasoning"] = f"Fallback to Admin: Assigned staff does not match department {response_data['best_department']}."
+                        response_data["department_confidence_score"] = 0
+                        if admin_staff:
+                            response_data["assigned_staff_email"] = admin_staff["cr6dd_email"]
+                            response_data["assigned_staff_name"] = admin_staff["cr6dd_name"]
+                            response_data["staff_skillset"] = admin_staff["cr6dd_skillset"]
+                            response_data["staff_assignment_status"] = "assigned_fallback"
+                            response_data["skillset_match_score"] = 50
+                            response_data["staff_match_reasoning"] = "Assigned to available Admin staff due to department mismatch."
 
-            if response_data.get("category") == "Unclassified" or response_data.get("staff_assignment_status") == "no_staff_available":
+                elif not staff or not staff["cr6dd_availability"]:
+                    logger.warning(f"Assigned staff {response_data['assigned_staff_email']} is invalid or unavailable. Defaulting to Admin staff.")
+                    admin_staff = self.select_admin_staff(staff_data)
+                    response_data["best_department"] = "Admin"
+                    response_data["department_reasoning"] = f"Fallback to Admin: Assigned staff is unavailable or invalid."
+                    response_data["department_confidence_score"] = 0
+                    if admin_staff:
+                        response_data["assigned_staff_email"] = admin_staff["cr6dd_email"]
+                        response_data["assigned_staff_name"] = admin_staff["cr6dd_name"]
+                        response_data["staff_skillset"] = admin_staff["cr6dd_skillset"]
+                        response_data["staff_assignment_status"] = "assigned_fallback"
+                        response_data["skillset_match_score"] = 50
+                        response_data["staff_match_reasoning"] = "Assigned to available Admin staff due to unavailable or invalid staff."
+                    else:
+                        response_data["assigned_staff_email"] = None
+                        response_data["assigned_staff_name"] = None
+                        response_data["staff_skillset"] = None
+                        response_data["staff_assignment_status"] = "no_staff_available"
+                        response_data["skillset_match_score"] = 0
+                        response_data["staff_match_reasoning"] = "No available staff in Admin department."
+
+            if response_data.get("category") == "Unclassified":
                 logger.warning(f"AI response indicates unclassified or problematic incident: {response_data}")
+                admin_staff = self.select_admin_staff(staff_data)
                 response_data["best_department"] = "Admin"
                 response_data["department_reasoning"] = "Defaulted to Admin due to unclassified or problematic incident description."
                 response_data["department_confidence_score"] = 0
-                response_data["assigned_staff_id"] = None
-                response_data["assigned_staff_code"] = None
-                response_data["staff_skillset"] = None
-                response_data["staff_assignment_status"] = "no_staff_available"
-                response_data["skillset_match_score"] = 0
-                response_data["staff_match_reasoning"] = "No staff assigned due to unclassified or problematic incident description"
-
+                if admin_staff:
+                    response_data["assigned_staff_email"] = admin_staff["cr6dd_email"]
+                    response_data["assigned_staff_name"] = admin_staff["cr6dd_name"]
+                    response_data["staff_skillset"] = admin_staff["cr6dd_skillset"]
+                    response_data["staff_assignment_status"] = "assigned_fallback"
+                    response_data["skillset_match_score"] = 50
+                    response_data["staff_match_reasoning"] = "Assigned to available Admin staff due to unclassified or problematic incident description."
             classification_response = {
                 "category": response_data.get("category", "General"),
                 "severity": response_data.get("severity", "Medium"),
@@ -165,8 +203,8 @@ class AIClassificationService:
             }
 
             staff_assignment = {
-                "assigned_staff_id": response_data.get("assigned_staff_id"),
-                "assigned_staff_code": response_data.get("assigned_staff_code"),
+                "assigned_staff_email": response_data.get("assigned_staff_email"),
+                "assigned_staff_name": response_data.get("assigned_staff_name"),
                 "assigned_department": response_data.get("best_department"),
                 "staff_skillset": response_data.get("staff_skillset"),
             }

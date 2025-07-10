@@ -11,7 +11,9 @@ SAMPLE_STAFF_DATA = [
         "cr6dd_staffid": "ace478dc-6057-f011-bec2-000d3a5c4fb0",
         "cr6dd_newcolumn": "001",
         "cr6dd_availability@OData.Community.Display.V1.FormattedValue": "Yes",
-        "cr6dd_availability": True
+        "cr6dd_availability": True,
+        "cr6dd_name": "Alice Smith",
+        "cr6dd_email": "alice@mazikcloud.com",
     },
     {
         "@odata.type": "#Microsoft.Dynamics.CRM.cr6dd_staff",
@@ -25,7 +27,9 @@ SAMPLE_STAFF_DATA = [
         "cr6dd_staffid": "d9c37551-f757-f011-bec2-000d3a5c4fb0",
         "cr6dd_newcolumn": "002",
         "cr6dd_availability@OData.Community.Display.V1.FormattedValue": "Yes",
-        "cr6dd_availability": True
+        "cr6dd_availability": True,
+        "cr6dd_name": "Alice Smith",
+        "cr6dd_email": "alice@mazikcloud.com",
     },
     {
         "@odata.type": "#Microsoft.Dynamics.CRM.cr6dd_staff",
@@ -39,7 +43,9 @@ SAMPLE_STAFF_DATA = [
         "cr6dd_staffid": "7d8e86ad-f957-f011-bec2-000d3a5c4fb0",
         "cr6dd_newcolumn": "003",
         "cr6dd_availability@OData.Community.Display.V1.FormattedValue": "Yes",
-        "cr6dd_availability": True
+        "cr6dd_availability": True,
+        "cr6dd_name": "Alice Smith",
+        "cr6dd_email": "alice@mazikcloud.com",
     },
     {
         "@odata.type": "#Microsoft.Dynamics.CRM.cr6dd_staff",
@@ -53,6 +59,8 @@ SAMPLE_STAFF_DATA = [
         "cr6dd_staffid": "12345678-1234-1234-1234-1234567890ab",
         "cr6dd_newcolumn": "004",
         "cr6dd_availability@OData.Community.Display.V1.FormattedValue": "Yes",
-        "cr6dd_availability": True
+        "cr6dd_availability": True,
+        "cr6dd_name": "Alice Smith",
+        "cr6dd_email": "alice@mazikcloud.com",
     }
 ]
