@@ -2,10 +2,10 @@ import json
 from datetime import datetime
 from fastapi import HTTPException
 from typing import Dict, Any, List, Optional, Tuple
-from app.models.requests import IncidentRequest
-from app.services.ai_service import AzureClient
-from app.utils.logging import logger
-from app.services.sample_data import SAMPLE_STAFF_DATA
+from models.requests import IncidentRequest
+from services.ai_service import AzureClient
+from utils.logging import logger
+from services.sample_data import SAMPLE_STAFF_DATA
 
 
 class AIClassificationService:

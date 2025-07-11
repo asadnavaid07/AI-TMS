@@ -1,7 +1,7 @@
 from openai import AsyncAzureOpenAI
 from typing import List, Dict, Any
-from app.config import settings
-from app.utils.logging import logger
+from config import settings
+from utils.logging import logger
 
 class AzureClient:
     def __init__(self):

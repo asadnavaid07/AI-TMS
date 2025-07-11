@@ -1,10 +1,10 @@
 from fastapi import APIRouter
-from app.models.requests import (IncidentRequest)
-from app.models.requests import (RegenerateRequest)
-from app.models.response import ClassificationWithStaffResponse,RegenerateResponse
-from app.services.classification import AIClassificationService
-from app.services.regenerate import AIRegenerator
-from app.utils.logging import logger
+from models.requests import (IncidentRequest)
+from models.requests import (RegenerateRequest)
+from models.response import ClassificationWithStaffResponse,RegenerateResponse
+from services.classification import AIClassificationService
+from services.regenerate import AIRegenerator
+from utils.logging import logger
 from datetime import datetime
 
 router=APIRouter()
