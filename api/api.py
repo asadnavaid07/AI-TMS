@@ -1,6 +1,6 @@
 from fastapi import APIRouter
-from app.api.endpoints.incident import router as incident_router
-from app.api.endpoints.staff import router as get_staff_router
+from api.endpoints.incident import router as incident_router
+from api.endpoints.staff import router as get_staff_router
 
 api_router = APIRouter()
 

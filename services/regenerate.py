@@ -1,10 +1,10 @@
-from app.models.requests import RegenerateRequest
+from models.requests import RegenerateRequest
 from datetime import datetime
-from app.services.ai_service import AzureClient
+from services.ai_service import AzureClient
 import json
 from datetime import datetime
 from fastapi import HTTPException
-from app.utils.logging import logger
+from utils.logging import logger
 
 
 

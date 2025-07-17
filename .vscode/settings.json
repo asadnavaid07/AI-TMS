@@ -1,0 +1,4 @@
+{
+    "appService.defaultWebAppToDeploy": "/subscriptions/15eda2a9-e8e9-47c7-8a8c-78dd32f37f97/resourceGroups/appsvc_linux_eastus_basic/providers/Microsoft.Web/sites/AITraigeAndIncidentReporting",
+    "appService.deploySubpath": "."
+}

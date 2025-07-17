@@ -1,9 +1,9 @@
 from fastapi import FastAPI,HTTPException,Request
 from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
-from app.config import settings
-from app.api.api import api_router
-from app.utils.logging import logger
+from config import settings
+from api.api import api_router
+from utils.logging import logger
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -39,11 +39,12 @@ def create_application()->FastAPI:
         )
     
     return app
-    
 
 
 app = create_application()
 
 if __name__ == "__main__":
+    import os
     import uvicorn
-    uvicorn.run(app, host=settings.host, port=settings.port)
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run(app, host=settings.host, port=port)

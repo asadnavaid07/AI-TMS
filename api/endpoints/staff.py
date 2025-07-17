@@ -2,7 +2,7 @@ from fastapi import HTTPException, APIRouter
 from typing import List, Any, Dict
 
 import httpx
-from app.models.staff_validations import StaffRecord
+from models.staff_validations import StaffRecord
 
 router = APIRouter()
 
