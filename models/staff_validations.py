@@ -23,7 +23,7 @@ class StaffRecord(BaseModel):
     odata_editLink: str = Field(alias="@odata.editLink")
     staffid: str = Field(alias="cr6dd_staffid")
     skillset:str=Field(alias="cr6dd_skillset")
-    departmentname: str = Field(alias="cr6dd_departmentname")
+    departmentname: str = Field(alias="cr6dd_department@OData.Community.Display.V1.FormattedValue")
     staff1id_type: str = Field(alias="cr6dd_staff1id@odata.type")
     staff1id: str = Field(alias="cr6dd_staff1id")
     availability: bool = Field(alias="cr6dd_availability")

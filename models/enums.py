@@ -14,6 +14,7 @@ class CategoryEnum(str, Enum):
     ACCESS_CONTROL = "Access Control"
     ADMIN="Admin"
     NETWORK="Network"
+    CREATIVE="Creative"
 
 class SeverityEnum(str,Enum):
     LOW = "Low"
