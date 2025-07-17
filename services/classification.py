@@ -2,7 +2,7 @@ import json
 import re
 from datetime import datetime
 from fastapi import HTTPException
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Dict, Any, List, Optional, Tuple,Set
 from models.requests import IncidentRequest
 from services.ai_service import AzureClient
 from utils.logging import logger
