@@ -21,26 +21,20 @@ async def get_staff_data():
         )
 
         async with httpx.AsyncClient() as client:
-            # Make GET request to Power Automate trigger
             response = await client.get(power_automate_url)
-
-            # Check if the request was successful
             if response.status_code != 200:
                 raise HTTPException(
                     status_code=response.status_code,
                     detail=f"Power Automate API request failed: {response.text}"
                 )
 
-            # Parse the response data
             response_data = response.json()
 
-            # Check if response is a list; if not, check for 'value' key
             if isinstance(response_data, list):
                 staff_records = response_data
             else:
                 staff_records = response_data.get("value", response_data)
 
-            # Ensure staff_records is a list
             if not isinstance(staff_records, list):
                 raise HTTPException(
                     status_code=400,

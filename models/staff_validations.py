@@ -3,7 +3,7 @@ from typing import List, Dict, Any
 from pydantic import BaseModel, Field
 from typing import Optional
 
-# Pydantic models
+
 class UserRecord(BaseModel):
     odata_type: str = Field(alias="@odata.type")
     odata_id: str = Field(alias="@odata.id")
@@ -22,8 +22,8 @@ class StaffRecord(BaseModel):
     odata_etag: str = Field(alias="@odata.etag")
     odata_editLink: str = Field(alias="@odata.editLink")
     staffid: str = Field(alias="cr6dd_staffid")
-    skillset:str=Field(alias="cr6dd_skillset")
-    departmentname: str = Field(alias="cr6dd_department@OData.Community.Display.V1.FormattedValue")
+    skillset: str = Field(alias="cr6dd_skillset")
+    departmentname: str= Field(alias="cr6dd_departmentname")  
     staff1id_type: str = Field(alias="cr6dd_staff1id@odata.type")
     staff1id: str = Field(alias="cr6dd_staff1id")
     availability: bool = Field(alias="cr6dd_availability")
