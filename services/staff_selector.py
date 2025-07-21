@@ -21,7 +21,7 @@ class StaffSelector:
                 staff_skills = set(skill.strip().lower() for skill in staff["cr6dd_skillset"].split(","))
                 required_skills_set = set(skill.lower() for skill in required_skills)
                 match_score = len(staff_skills.intersection(required_skills_set))
-                logger.debug(f"Evaluating staff {staff["cr6dd_UserID"]['cr6dd_name']} in {department}: match_score={match_score}, skills={staff_skills}")
+                # logger.debug(f"Evaluating staff {staff["cr6dd_UserID"]['cr6dd_name']} in {department}: match_score={match_score}, skills={staff_skills}")
                 if match_score > best_score:
                     best_score = match_score
                     best_staff = staff
