@@ -44,7 +44,7 @@ class ResponseBuilder:
             logger.error(f"No available Admin staff for {category} fallback response. Reason: {reason}")
             raise ValueError(f"Cannot create fallback response: No available staff in {DEFAULT_FALLBACK_DEPARTMENT} for {category} case")
 
-        logger.info(f"Creating fallback response for Admin staff: {admin_staff["cr6dd_UserID"]['cr6dd_name']}")
+        # logger.info(f"Creating fallback response for Admin staff: {admin_staff["cr6dd_UserID"]['cr6dd_name']}")
         return {
             "classification": {
                 "category": category,
@@ -53,7 +53,8 @@ class ResponseBuilder:
                 "required_skills": DEFAULT_FALLBACK_SKILLS,
                 "title": "Undefined",
                 "summary": summary,
-                "email": f"Dear {admin_staff["cr6dd_UserID"]['cr6dd_name']}, this incident requires manual review due to: {reason}. Please assign to the appropriate team or handle accordingly."
+                "email": f"Dear Admin, this incident requires manual review due to: {reason}. Please assign to the appropriate team or handle accordingly."
+                # "email": f"Dear {admin_staff["cr6dd_UserID"]['cr6dd_name']}, this incident requires manual review due to: {reason}. Please assign to the appropriate team or handle accordingly."
             },
             "staff_assignment": {
                 "assigned_staff_email": admin_staff["cr6dd_UserID"]["cr6dd_email"],

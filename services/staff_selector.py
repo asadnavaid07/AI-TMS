@@ -31,12 +31,12 @@ class StaffSelector:
             for staff in staff_data:
                 if staff["cr6dd_departmentname"] == department and staff.get("cr6dd_availability", False):
                     best_staff = staff
-                    logger.info(f"No skill match for Admin fallback, selecting available staff: {staff["cr6dd_UserID"]['cr6dd_name']}")
+                    # logger.info(f"No skill match for Admin fallback, selecting available staff: {staff["cr6dd_UserID"]['cr6dd_name']}")
                     break
 
-        if not best_staff:
-            logger.warning(f"No available staff found for department: {department} with skills: {required_skills}")
-        else:
-            logger.info(f"Selected staff {best_staff["cr6dd_UserID"]['cr6dd_name']} for department: {department}")
+        # if not best_staff:
+            # logger.warning(f"No available staff found for department: {department} with skills: {required_skills}")
+        # else:
+        #     logger.info(f"Selected staff {best_staff["cr6dd_UserID"]['cr6dd_name']} for department: {department}")
 
         return best_staff
